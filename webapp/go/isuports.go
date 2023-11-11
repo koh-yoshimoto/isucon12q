@@ -102,7 +102,7 @@ func createTenantDB(id int64) error {
 
 // システム全体で一意なIDを生成する
 func dispenseID(ctx context.Context) (string, error) {
-	return uuid.New(), nil
+	return uuid.NewString(), nil
 }
 
 // 全APIにCache-Control: privateを設定する

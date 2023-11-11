@@ -1,0 +1,10 @@
+/go/
+/local/
+/pprof/
+/initial_data*
+/tmp/
+/webapp/sql/admin/
+/webapp/tenant_db/
+/webapp/go/isuports
+/.*
+!/.gitignore

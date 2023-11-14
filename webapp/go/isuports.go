@@ -408,9 +408,11 @@ func retrieveCompetition(ctx context.Context, tenantDB dbOrTx, id string) (*Comp
 
 type PlayerScoreRow struct {
 	TenantID      int64  `db:"tenant_id"`
+	ID            string `db:"id"`
 	PlayerID      string `db:"player_id"`
 	CompetitionID string `db:"competition_id"`
 	Score         int64  `db:"score"`
+	RowNum        int64  `db:"row_num"`
 	CreatedAt     int64  `db:"created_at"`
 	UpdatedAt     int64  `db:"updated_at"`
 }
@@ -1076,16 +1078,18 @@ func competitionScoreHandler(c echo.Context) error {
 				fmt.Sprintf("error strconv.ParseUint: scoreStr=%s, %s", scoreStr, err),
 			)
 		}
-		// id, err := dispenseID(ctx)
-		// if err != nil {
-		// 	return fmt.Errorf("error dispenseID: %w", err)
-		// }
+		id, err := dispenseID(ctx)
+		if err != nil {
+			return fmt.Errorf("error dispenseID: %w", err)
+		}
 		now := time.Now().Unix()
 		playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+			ID:            id,
 			TenantID:      v.tenantID,
 			PlayerID:      playerID,
 			CompetitionID: competitionID,
 			Score:         score,
+			RowNum:        rowNum,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		})
@@ -1108,12 +1112,12 @@ func competitionScoreHandler(c echo.Context) error {
 	for _, ps := range playerScoreRows {
 		if _, err := tx.ExecContext(
 			ctx,
-			"REPLACE INTO player_score (tenant_id, player_id, competition_id, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.CreatedAt, ps.UpdatedAt,
+			"INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			ps.ID, ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.RowNum, ps.CreatedAt, ps.UpdatedAt,
 		); err != nil {
 			return fmt.Errorf(
-				"error Replace player_score: tenant_id=%d, playerID=%s, competitionID=%s, score=%d,createdAt=%d, updatedAt=%d, %w",
-				ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.CreatedAt, ps.UpdatedAt, err,
+				"error Insert player_score: id=%s, tenant_id=%d, playerID=%s, competitionID=%s, score=%d, rowNum=%d, createdAt=%d, updatedAt=%d, %w",
+				ps.ID, ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.RowNum, ps.CreatedAt, ps.UpdatedAt, err,
 			)
 
 		}
@@ -1248,7 +1252,7 @@ func playerHandler(c echo.Context) error {
 			ctx,
 			&ps,
 			// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-			"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? LIMIT 1",
+			"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1",
 			v.tenantID,
 			c.ID,
 			p.ID,
@@ -1373,7 +1377,7 @@ func competitionRankingHandler(c echo.Context) error {
 	if err := tenantDB.SelectContext(
 		ctx,
 		&pss,
-		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ?",
+		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC",
 		tenant.ID,
 		competitionID,
 	); err != nil {
@@ -1396,6 +1400,7 @@ func competitionRankingHandler(c echo.Context) error {
 			Score:             ps.Score,
 			PlayerID:          p.ID,
 			PlayerDisplayName: p.DisplayName,
+			RowNum:            ps.RowNum,
 		})
 	}
 	sort.Slice(ranks, func(i, j int) bool {

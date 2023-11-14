@@ -304,8 +304,8 @@ func storeTenant(tenant *isuports.TenantRow, players []*isuports.PlayerRow, comp
 			fmt.Fprint(os.Stderr, ".")
 			tx = mustTx()
 			if _, err := tx.NamedExec(
-				`REPLACE INTO player_score (tenant_id, player_id, competition_id, score, created_at, updated_at)
-				VALUES(:tenant_id, :player_id, :competition_id, :score, :created_at, :updated_at)`,
+				`INSERT INTO player_score (tenant_id, id, player_id, competition_id, score, row_num, created_at, updated_at)
+				VALUES(:tenant_id, :id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)`,
 				pss[from:i],
 			); err != nil {
 				tx.Rollback()
@@ -497,6 +497,7 @@ func CreatePlayerData(
 					created := fake.Int64Between(c.CreatedAt, end)
 					competitionScores = append(competitionScores, &isuports.PlayerScoreRow{
 						TenantID:      tenant.ID,
+						ID:            GenID(created),
 						PlayerID:      p.ID,
 						CompetitionID: c.ID,
 						Score:         CreateScore(),
@@ -521,6 +522,9 @@ func CreatePlayerData(
 		sort.Slice(competitionScores, func(i, j int) bool {
 			return competitionScores[i].CreatedAt < competitionScores[j].CreatedAt
 		})
+		for i := range competitionScores {
+			competitionScores[i].RowNum = int64(i + 1)
+		}
 		scores = append(scores, competitionScores...)
 
 		bcs = append(bcs, &BenchmarkerCompeittion{
